@@ -30,5 +30,18 @@
     "ct":["binary_large_object_BLOB"],
     "server":["binary_large_object_BLOB"],
     "x509":["binary_large_object_BLOB"],
-    "bloaty_fuzz_target": ["elf", "macho", "wasm"]
+    "bloaty_fuzz_target": ["binary_large_object_BLOB"],
+    "zlib_zlib_uncompress_fuzzer": ["binary_large_object_BLOB"],
+    "freetype2_ftfuzzer": ["binary_large_object_BLOB"],
+    "harfbuzz_hb-shape-fuzzer": ["binary_large_object_BLOB"],
+    "lcms_cms_transform_fuzzer": ["binary_large_object_BLOB"],
+    "libjpeg-turbo_libjpeg_turbo_fuzzer": ["binary_large_object_BLOB"],
+    "libpcap_fuzz_both": ["binary_large_object_BLOB"],
+    "mbedtls_fuzz_dtlsclient": ["binary_large_object_BLOB"],
+    "mruby_mruby_fuzzer_8c8bbd": ["binary_large_object_BLOB"],
+    "openh264_decoder_fuzzer": ["binary_large_object_BLOB"],
+    "openthread_ot-ip6-send-fuzzer": ["binary_large_object_BLOB"],
+    "stb_stbi_read_fuzzer": ["binary_large_object_BLOB"],
+    "vorbis_decode_fuzzer": ["binary_large_object_BLOB"],
+    "woff2_convert_woff2ttf_fuzzer": ["binary_large_object_BLOB"]
 }
