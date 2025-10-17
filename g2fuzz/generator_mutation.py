@@ -1,6 +1,9 @@
 import os
 import sys
 import argparse
+import random
+import json
+import copy
 
 class TreeNode:
     def __init__(self, file_id, orig_name=None):
@@ -59,25 +62,47 @@ def list_files(path):
     file_list = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
     return file_list
 
+# -------------------- Improved prompts and system message --------------------
+
 generator_mutation_feature_prompt_init = '''
 ```
 <TARGET_GENERATOR>
 ```
 
-Based on the above code, provide me with a more complex code that can generate <FROMAT> files with additional more complex file features. 
+Goal
+----
+Produce a **more advanced generator** (same target language / file format as `<FROMAT>`) that extends the given generator with **richer, realistic file features**. Focus on producing code that is runnable, well-documented, and testable.
 
-Please respond according to the following template: 
-Here's an extended version of the code that generates a <FROMAT> file with <more complex file features > such as <specific file features>: 
+Requirements
+- Maintain the same file format and relevant conventions as the original `<TARGET_GENERATOR>`.
+- Add specific, realistic file features (describe them in the short header comment of the generated code).
+- Include inline comments, input/output examples, and a small self-test or `if __name__ == "__main__":` demo that creates sample files.
+- Avoid external network calls and non-standard system dependencies. If a package is necessary, list it at the top in a comment and keep it minimal.
+- The assistant's output MUST be a single Markdown code block containing only the final Python code (no extra prose), following the template below.
+
+Template
+--------
+Here's an extended version of the code that generates a `<FROMAT>` file with additional, more complex file features such as `<specific file features>`:
 ```
 <Generated Code>
 ```
 '''
 
 generator_mutation_feature_prompt_incre = '''
-Based on the above code, provide me with a more complex code that can generate <FROMAT> files with additional more complex file features. 
+Goal
+----
+Incrementally enhance the provided generator for `<FROMAT>` files by adding **additional, progressively complex file features**.
 
-Please respond according to the following template: 
-Here's an extended version of the code that generates a <FROMAT> file with <more complex file features > such as <specific file features>: 
+Requirements
+- Start from the given `<TARGET_GENERATOR>` behavior and extend it; preserve backwards compatibility where feasible.
+- Provide a clear brief comment at the top describing the new features added.
+- Include small automated checks or examples demonstrating the new features.
+- Do not call external services or require heavy external dependencies. If a third-party library is used, include a fallback pure-Python implementation or an explanation.
+- Output format: a single Markdown code block containing only the updated generator code.
+
+Template
+--------
+Here's an extended version of the code that generates a `<FROMAT>` file with additional more complex file features such as `<specific file features>`:
 ```
 <Generated Code>
 ```
@@ -88,20 +113,40 @@ generator_mutation_structure_prompt_init = '''
 <TARGET_GENERATOR>
 ```
 
-Based on the above code, provide me with a more complex code that can generate <FROMAT> files with more complex file structures. 
+Goal
+----
+Create a stronger generator variant that produces `<FROMAT>` files with **more complex internal structure** (nested sections, cross-references, metadata blocks, checksums, multiple segments, etc.) while keeping the same format family.
 
-Please respond according to the following template: 
-Here's an extended version of the code that generates a <FROMAT> file with <more complex file structures > such as <specific file structures>: 
+Requirements
+- Preserve the original file format's compatibility where reasonable (comment this explicitly in the header).
+- Add modular code structure: helper functions, clear data model, and at least one unit-test-like demo.
+- Include short examples of generated file contents (as docstring or comments).
+- Provide error handling for malformed inputs and a CLI example for running the generator.
+- Return **only** a single Markdown code block with the complete generator code.
+
+Template
+--------
+Here's an extended version of the code that generates a `<FROMAT>` file with more complex file structures such as `<specific file structures>`:
 ```
 <Generated Code>
 ```
 '''
 
 generator_mutation_structure_prompt_incre = '''
-Based on the above code, provide me with a more complex code that can generate <FROMAT> files with more complex file structures. 
+Goal
+----
+Incrementally transform an existing `<FROMAT>` generator to produce **richer file structures** (e.g., multiple logical sections, hierarchical segments, embedded metadata, and validation routines).
 
-Please respond according to the following template: 
-Here's an extended version of the code that generates a <FROMAT> file with <more complex file structures > such as <specific file structures>: 
+Requirements
+- State clearly what structural changes are being made in the header comment.
+- Add helper utilities for building and validating the new structure.
+- Include example outputs and a short self-check routine.
+- Keep the code self-contained (no hidden network calls) and provide a minimal dependency list if required.
+- Output must be one Markdown code block containing only the generated code.
+
+Template
+--------
+Here's an extended version of the code that generates a `<FROMAT>` file with more complex file structures such as `<specific file structures>`:
 ```
 <Generated Code>
 ```
@@ -118,20 +163,38 @@ The mutated code:
 <MUT>
 ```
 
-Imitate the mutation of 'The original code -> The mutated code' above and apply it to the following target code:
+Task
+----
+Imitate the **mutation transformation** demonstrated above (how `<ORI>` became `<MUT>`) and **apply the same mutation approach** to the following target code:
 ```
 <TARGET_CODE>
 ```
 
-Please respond according to the following template: 
+Deliverable Requirements
+- Begin your output with a one-line summary describing the primary change (e.g., "The mutated code differs from the original mainly in ...").
+- Then produce the mutated version of `<TARGET_CODE>` that applies the same transformation pattern (preserve language and style consistency).
+- Add brief inline comments showing which parts correspond to the mutation pattern where helpful.
+- Include a short example or quick test demonstrating the mutated generator's new behavior.
+- Output only: a single Markdown code block containing the mutated target code (do **not** include long explanations outside the code block).
+
+Template
+--------
 "The mutated code" differs from "The original code" mainly in <changing/adding/... specific file features/structures>. We can apply the same mutation approach to the target code to obtain:
 ```
 <The mutated code of the target code>
 ```
 '''
 
+# Improved system message used in your llm log
+improved_system_message = (
+    "You are an expert assistant that writes, debugs, and tests generator scripts. "
+    "When asked to emit code, produce a single Markdown code block containing only the final code. "
+    "Write clear top-of-file comments explaining: purpose, required dependencies, new features added, and a minimal usage demo. "
+    "Prefer self-contained, dependency-light code and include small self-tests or `__main__` examples. "
+    "Avoid network calls and interactive prompts. If a dependency is unavoidable, list it and provide a pure-Python fallback."
+)
 
-
+# -------------------- Mutation functions (use external py_utils for helpers) --------------------
 
 def mutation_based_on_pattern(model, tmp_path, seeds_path, generators, output_path, mutation_log, relationship, mutation_pattern):
     cur_mutation_pattern = random.choice(mutation_pattern)
@@ -159,7 +222,7 @@ def mutation_based_on_pattern(model, tmp_path, seeds_path, generators, output_pa
         target_generator_code = file.read()
     
     target_generator_log = [
-        {"role": "system", "content": "You are an advanced Language Model assistant that can generate, execute, and evaluate code. Please use Markdown syntax to represent code blocks."},
+        {"role": "system", "content": improved_system_message},
     ]
     prompt = copy.deepcopy(pattern_based_mutation_prompt)
     prompt = prompt.replace("<ORI>", ori_code)
@@ -215,7 +278,7 @@ def mutation_based_on_predefined_mutators(model, tmp_path, seeds_path, generator
         target_generator_code = file.read()
     
     target_generator_log = [
-        {"role": "system", "content": "You are an advanced Language Model assistant that can generate, execute, and evaluate code. Please use Markdown syntax to represent code blocks."},
+        {"role": "system", "content": improved_system_message},
     ]
     init = copy.deepcopy(prompt_init)
     init = init.replace("<FROMAT>", file_format)
@@ -255,6 +318,7 @@ def mutation_based_on_predefined_mutators(model, tmp_path, seeds_path, generator
         return True
     else:
         return False
+
 
 if __name__ == "__main__":
     
